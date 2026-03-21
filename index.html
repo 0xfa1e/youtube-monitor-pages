@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YouTube 爆款控制台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- 引入 Fuse.js 用于高效模糊搜索 -->
+  <script src="https://cdn.jsdelivr.net/npm/fuse.js/dist/fuse.js"></script>
+  <style>
+    body {
+      font-family: "SF Pro Display", "SF Pro Text", "Helvetica Neue", "Noto Sans", sans-serif;
+      letter-spacing: 0;
+    }
+
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #e9eaee;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #c7c9d1;
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #b5b8c2;
+    }
+
+    .fade-in {
+      animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .fav-btn {
+      color: #9ca3af;
+    }
+
+    .fav-btn.fav-active {
+      color: #ff9f0a;
+    }
+
+    .fav-btn svg {
+      color: currentColor;
+    }
+
+    .unclicked-card {
+      border-color: rgba(0, 113, 227, 0.65);
+      box-shadow: 0 0 0 1px rgba(0, 113, 227, 0.35), 0 0 18px rgba(0, 113, 227, 0.2);
+      animation: cardPulse 2.2s ease-in-out infinite;
+    }
+
+    .last-clicked-card {
+      border-color: rgba(52, 199, 89, 0.85);
+      box-shadow: 0 0 0 1px rgba(52, 199, 89, 0.6), 0 0 18px rgba(52, 199, 89, 0.35);
+      animation: none;
+    }
+
+    @keyframes cardPulse {
+      0% {
+        box-shadow: 0 0 0 1px rgba(0, 113, 227, 0.25), 0 0 10px rgba(0, 113, 227, 0.15);
+      }
+
+      50% {
+        box-shadow: 0 0 0 1px rgba(0, 113, 227, 0.55), 0 0 18px rgba(0, 113, 227, 0.35);
+      }
+
+      100% {
+        box-shadow: 0 0 0 1px rgba(0, 113, 227, 0.25), 0 0 10px rgba(0, 113, 227, 0.15);
+      }
+    }
+
+    .custom-select {
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23d1d5db' stroke-width='2.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19.5 8.25l-7.5 7.5-7.5-7.5'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 0.5rem center;
+      background-size: 0.9rem;
+      padding-right: 2.5rem;
+    }
+
+    .custom-select:hover {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af' stroke-width='2.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19.5 8.25l-7.5 7.5-7.5-7.5'/%3E%3C/svg%3E");
+    }
+  </style>
+</head>
+
+<body class="bg-[#f5f5f7] text-[#1d1d1f] min-h-screen selection:bg-blue-200/60">
+  <div
+    class="fixed inset-0 z-[-1] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-white via-[#f5f5f7] to-[#eef0f3] pointer-events-none">
+  </div>
+
+  <div class="w-full px-4 sm:px-6 lg:px-8 py-4">
+    <!-- Header -->
+    <div class="mb-6 text-center md:text-left flex flex-col md:flex-row md:items-end justify-between gap-4 relative">
+      <div>
+        <h1 class="text-2xl md:text-4xl font-semibold mb-2 tracking-tight text-[#1d1d1f]">YouTube 爆款大盘</h1>
+        <p class="text-sm text-[#6e6e73] font-medium">全网优质频道极速追踪系统 <span id="total-count"
+            class="text-[#0071e3] mx-2 font-semibold">0</span> 条已截获</p>
+      </div>
+
+      <!-- Top Filters -->
+      <div class="flex flex-wrap items-center gap-3">
+        <select id="month-select"
+          class="bg-white border border-gray-200 text-gray-800 text-sm rounded-xl px-4 py-2.5 outline-none hover:border-gray-300 transition cursor-pointer relative hidden shadow-sm custom-select">
+          <!-- Options injected by JS -->
+        </select>
+
+        <select id="sort-select"
+          class="bg-white border border-gray-200 text-gray-800 text-sm rounded-xl px-4 py-2.5 outline-none hover:border-gray-300 transition cursor-pointer shadow-sm custom-select">
+          <option value="pubDown">发布时间 ↓</option>
+          <option value="timeDown">发现时间 ↓</option>
+          <option value="viewsDown">播放量 ↓</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="flex flex-col lg:flex-row gap-4">
+      <!-- Left Filters -->
+      <aside
+        class="lg:w-64 bg-white/80 backdrop-blur-xl border border-gray-200 p-3 rounded-2xl h-fit sticky top-4 shadow-sm max-h-[calc(100vh-2rem)] overflow-y-auto overflow-x-hidden">
+        <div class="space-y-4">
+          <div>
+            <div class="text-[11px] font-semibold text-gray-500 tracking-widest uppercase mb-2">类型</div>
+            <div id="category-filters" class="flex flex-wrap items-center gap-1">
+              <!-- Categories injected by JS -->
+            </div>
+          </div>
+
+          <div>
+            <div class="text-[11px] font-semibold text-gray-500 tracking-widest uppercase mb-2">规则</div>
+            <div id="rule-filters" class="flex flex-wrap items-center gap-1">
+              <!-- Rules injected by JS -->
+            </div>
+          </div>
+
+          <div>
+            <div class="text-[11px] font-semibold text-gray-500 tracking-widest uppercase mb-2">获取日期</div>
+            <div class="flex flex-row items-center gap-1">
+              <input type="date" id="discover-start"
+                class="w-full min-w-0 bg-white border border-gray-200 text-[#1d1d1f] text-[11px] rounded-lg px-1.5 py-1.5 outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition cursor-pointer">
+              <span class="text-gray-400 text-[10px]">-</span>
+              <input type="date" id="discover-end"
+                class="w-full min-w-0 bg-white border border-gray-200 text-[#1d1d1f] text-[11px] rounded-lg px-1.5 py-1.5 outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition cursor-pointer">
+            </div>
+          </div>
+
+          <div>
+            <div class="text-[11px] font-semibold text-gray-500 tracking-widest uppercase mb-2">发布日期</div>
+            <div class="flex flex-row items-center gap-1">
+              <input type="date" id="publish-start"
+                class="w-full min-w-0 bg-white border border-gray-200 text-[#1d1d1f] text-[11px] rounded-lg px-1.5 py-1.5 outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition cursor-pointer">
+              <span class="text-gray-400 text-[10px]">-</span>
+              <input type="date" id="publish-end"
+                class="w-full min-w-0 bg-white border border-gray-200 text-[#1d1d1f] text-[11px] rounded-lg px-1.5 py-1.5 outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition cursor-pointer">
+            </div>
+          </div>
+
+          <div>
+            <div class="text-[11px] font-semibold text-gray-500 tracking-widest uppercase mb-2">时长筛选</div>
+            <div id="duration-filters" class="flex flex-wrap items-center gap-1">
+              <!-- Duration filters injected by JS -->
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <main class="flex-1">
+        <!-- Toolbar: Search & Sort -->
+        <div class="mb-4">
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <span class="text-gray-400 text-base">🔍</span>
+            </div>
+            <input type="text" id="search-input" placeholder="智能搜索：频道名、标题、分类..."
+              class="w-full bg-white border border-gray-200 text-gray-800 text-sm rounded-xl pl-9 pr-3 py-2.5 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition shadow-sm placeholder-gray-400">
+          </div>
+        </div>
+
+        <!-- Data Grid -->
+        <div id="video-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 min-h-[50vh]">
+          <!-- Loading State -->
+          <div class="col-span-full flex flex-col items-center justify-center py-20 text-gray-500">
+            <div class="w-10 h-10 border-4 border-gray-200 border-t-blue-500 rounded-full animate-spin mb-4"></div>
+            <p>正在拉取最新截获数据...</p>
+          </div>
+        </div>
+      </main>
+
+      <!-- Right Favorites -->
+      <aside
+        class="lg:w-64 bg-white/80 backdrop-blur-xl border border-gray-200 p-3 rounded-2xl h-fit sticky top-4 shadow-sm max-h-[calc(100vh-2rem)] overflow-y-auto overflow-x-hidden">
+        <div class="flex items-center justify-between mb-2">
+          <div class="text-[11px] font-semibold text-gray-500 tracking-widest uppercase">收藏列表</div>
+          <div id="favorites-count" class="text-xs font-bold text-[#ff9f0a]">0</div>
+        </div>
+        <div id="favorites-list" class="flex flex-col gap-1">
+          <div class="text-sm text-gray-500">暂无收藏</div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    let allVideos = [];
+    let currentMonthVideos = [];
+    let fuse = null;
+    let activeCategories = new Set();
+    let activeRules = new Set();
+    let activeDurationRanges = new Set();
+    let displayLimit = 40;
+    const scrollBatchSize = 40;
+    const durationRanges = [
+      { label: '0-20s', min: 0, max: 20 },
+      { label: '20-40s', min: 20, max: 40 },
+      { label: '40-60s', min: 40, max: 60 },
+      { label: '1m-20m', min: 60, max: 1200 },
+      { label: '20-60m', min: 1200, max: 3600 },
+      { label: '1h-2h', min: 3600, max: 7200 },
+      { label: '2h+', min: 7200, max: Infinity }
+    ];
+    const storageKeys = {
+      visited: 'ytm_visited_videos',
+      lastClicked: 'ytm_last_clicked',
+      favorites: 'ytm_favorites'
+    };
+    let visitedSet = loadVisitedSet();
+    let lastClickedId = loadLastClicked();
+    let favoritesMap = loadFavoritesMap();
+
+    // DOM Elements
+    const els = {
+      grid: document.getElementById('video-grid'),
+      search: document.getElementById('search-input'),
+      sort: document.getElementById('sort-select'),
+      categories: document.getElementById('category-filters'),
+      rules: document.getElementById('rule-filters'),
+      month: document.getElementById('month-select'),
+      total: document.getElementById('total-count'),
+      discoverStart: document.getElementById('discover-start'),
+      discoverEnd: document.getElementById('discover-end'),
+      publishStart: document.getElementById('publish-start'),
+      publishEnd: document.getElementById('publish-end'),
+      durationFilters: document.getElementById('duration-filters'),
+      favoritesList: document.getElementById('favorites-list'),
+      favoritesCount: document.getElementById('favorites-count'),
+      sentinel: null // Will create dynamically
+    };
+
+    async function init() {
+      setupInfiniteScroll();
+
+      try {
+        const metaRes = await fetch('./data/meta.json');
+        if (!metaRes.ok) throw new Error("Metadata not found");
+        const months = await metaRes.json();
+
+        if (months && months.length > 0) {
+          els.month.classList.remove('hidden');
+          months.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m;
+            opt.textContent = `报表：${m.replace('_', '年')}月`;
+            els.month.appendChild(opt);
+          });
+          await loadMonthData(months[0]);
+        } else {
+          showEmpty("当前还没有收集到任何爆款数据。");
+        }
+      } catch (err) {
+        console.error(err);
+        showEmpty("数据引擎初始化失败或尚未有任何历史记录产生。");
+      }
+
+      // Bind events
+      els.search.addEventListener('input', () => debounceRender());
+      els.sort.addEventListener('change', () => {
+        displayLimit = scrollBatchSize;
+        renderGrid();
+      });
+      els.month.addEventListener('change', (e) => {
+        displayLimit = scrollBatchSize;
+        loadMonthData(e.target.value);
+      });
+      els.grid.addEventListener('click', handleGridClick);
+      els.discoverStart.addEventListener('change', () => {
+        displayLimit = scrollBatchSize;
+        renderGrid();
+      });
+      els.discoverEnd.addEventListener('change', () => {
+        displayLimit = scrollBatchSize;
+        renderGrid();
+      });
+      els.publishStart.addEventListener('change', () => {
+        displayLimit = scrollBatchSize;
+        renderGrid();
+      });
+      els.publishEnd.addEventListener('change', () => {
+        displayLimit = scrollBatchSize;
+        renderGrid();
+      });
+      renderFavorites();
+    }
+
+    function setupInfiniteScroll() {
+      const options = {
+        root: null,
+        rootMargin: '200px',
+        threshold: 0.1
+      };
+
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const totalOnPage = parseInt(els.total.textContent || '0');
+            if (displayLimit < totalOnPage) {
+              displayLimit += scrollBatchSize;
+              renderGrid(true);
+            }
+          }
+        });
+      }, options);
+
+      // Create sentinel
+      const sentinel = document.createElement('div');
+      sentinel.id = 'load-more-sentinel';
+      sentinel.className = 'col-span-full h-20 flex flex-col items-center justify-center text-gray-400 text-xs py-10';
+      sentinel.innerHTML = `
+        <div class="w-5 h-5 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin mb-2"></div>
+        <p>正在拉取更多精彩视频...</p>
+      `;
+      els.sentinel = sentinel;
+      observer.observe(sentinel);
+    }
+
+    async function loadMonthData(monthStr) {
+      els.grid.innerHTML = '<div class="col-span-full text-center text-gray-500 py-20">加载数据中...</div>';
+      try {
+        const res = await fetch(`./data/videos_${monthStr}.json`);
+        if (res.ok) {
+          currentMonthVideos = await res.json();
+          // Setup Search Index
+          fuse = new Fuse(currentMonthVideos, {
+            keys: ['channelTitle', 'title', 'category'],
+            threshold: 0.3
+          });
+
+          buildCategoryFilters();
+          buildRuleFilters();
+          buildDurationFilters();
+          renderGrid();
+        } else {
+          throw new Error('Network response was not ok');
+        }
+      } catch (e) {
+        showEmpty("加载此月数据出错。");
+      }
+    }
+
+    function buildDurationFilters() {
+      els.durationFilters.innerHTML = '';
+      activeDurationRanges.clear();
+
+      const counts = {};
+      durationRanges.forEach(r => counts[r.label] = 0);
+
+      currentMonthVideos.forEach(v => {
+        const sec = v.durationSec || 0;
+        durationRanges.forEach(r => {
+          if (sec >= r.min && sec < r.max) {
+            counts[r.label]++;
+          }
+        });
+      });
+
+      const allBtn = document.createElement('button');
+      allBtn.className = 'px-3 py-1.5 bg-[#0071e3] border border-[#0077ed] text-white rounded-lg text-[11px] font-semibold transition shadow-sm';
+      allBtn.textContent = '全部';
+      allBtn.onclick = () => {
+        activeDurationRanges.clear();
+        updateDurationUI();
+        displayLimit = scrollBatchSize;
+        renderGrid();
+      };
+      els.durationFilters.appendChild(allBtn);
+
+      durationRanges.forEach(r => {
+        const btn = document.createElement('button');
+        btn.className = 'px-3 py-1.5 bg-white border border-gray-200 text-gray-600 hover:text-gray-800 rounded-lg text-[11px] font-medium transition';
+        btn.textContent = `${r.label} (${counts[r.label]})`;
+        btn.onclick = () => {
+          if (activeDurationRanges.has(r.label)) activeDurationRanges.delete(r.label);
+          else activeDurationRanges.add(r.label);
+          updateDurationUI();
+          displayLimit = scrollBatchSize;
+          renderGrid();
+        };
+        btn.dataset.range = r.label;
+        els.durationFilters.appendChild(btn);
+      });
+    }
+
+    function updateDurationUI() {
+      Array.from(els.durationFilters.children).forEach((btn, i) => {
+        if (i === 0) {
+          if (activeDurationRanges.size === 0) {
+            btn.className = 'px-3 py-1.5 bg-[#0071e3] border border-[#0077ed] text-white rounded-lg text-[11px] font-semibold transition shadow-sm';
+          } else {
+            btn.className = 'px-3 py-1.5 bg-white border border-gray-200 text-gray-500 hover:text-gray-800 rounded-lg text-[11px] font-medium transition';
+          }
+        } else {
+          const range = btn.dataset.range;
+          if (activeDurationRanges.has(range)) {
+            btn.className = 'px-3 py-1.5 bg-[#0071e3] border border-[#0077ed] text-white rounded-lg text-[11px] font-semibold transition shadow-sm';
+          } else {
+            btn.className = 'px-3 py-1.5 bg-white border border-gray-200 text-gray-500 hover:text-gray-800 rounded-lg text-[11px] font-medium transition hover:border-gray-300';
+          }
+        }
+      });
+    }
+
+    function buildCategoryFilters() {
+      els.categories.innerHTML = '';
+      activeCategories.clear();
+      const counts = {};
+      currentMonthVideos.forEach(v => {
+        const cat = v.category || '未分类';
+        counts[cat] = (counts[cat] || 0) + 1;
+      });
+
+      // "All" button
+      const allBtn = document.createElement('button');
+      allBtn.className = 'px-3 py-1.5 bg-[#0071e3] border border-[#0077ed] text-white rounded-lg text-[11px] font-semibold transition shadow-sm';
+      allBtn.textContent = '全部';
+      allBtn.onclick = () => {
+        activeCategories.clear();
+        updateCategoryUI();
+        displayLimit = scrollBatchSize;
+        renderGrid();
+      };
+      els.categories.appendChild(allBtn);
+
+      Object.keys(counts).sort((a, b) => counts[b] - counts[a]).forEach(cat => {
+        const btn = document.createElement('button');
+        btn.className = 'px-3 py-1.5 bg-white border border-gray-200 text-gray-600 hover:text-gray-800 rounded-lg text-[11px] font-medium transition';
+        btn.textContent = `${cat} (${counts[cat]})`;
+        btn.onclick = () => {
+          if (activeCategories.has(cat)) activeCategories.delete(cat);
+          else activeCategories.add(cat);
+          updateCategoryUI();
+          displayLimit = scrollBatchSize;
+          renderGrid();
+        };
+        // Attach cat info to DOM element
+        btn.dataset.cat = cat;
+        els.categories.appendChild(btn);
+      });
+    }
+
+    function buildRuleFilters() {
+      els.rules.innerHTML = '';
+      activeRules.clear();
+      const counts = {};
+      currentMonthVideos.forEach(v => {
+        (v.matchedRules || []).forEach(rule => {
+          counts[rule] = (counts[rule] || 0) + 1;
+        });
+      });
+
+      const allBtn = document.createElement('button');
+      allBtn.className = 'px-3 py-1.5 bg-[#0071e3] border border-[#0077ed] text-white rounded-lg text-[11px] font-semibold transition shadow-sm';
+      allBtn.textContent = '全部';
+      allBtn.onclick = () => {
+        activeRules.clear();
+        updateRuleUI();
+        displayLimit = scrollBatchSize;
+        renderGrid();
+      };
+      els.rules.appendChild(allBtn);
+
+      Object.keys(counts).sort((a, b) => counts[b] - counts[a]).forEach(rule => {
+        const btn = document.createElement('button');
+        btn.className = 'px-3 py-1.5 bg-white border border-gray-200 text-gray-600 hover:text-gray-800 rounded-lg text-[11px] font-medium transition';
+        btn.textContent = `${rule} (${counts[rule]})`;
+        btn.onclick = () => {
+          if (activeRules.has(rule)) activeRules.delete(rule);
+          else activeRules.add(rule);
+          updateRuleUI();
+          displayLimit = scrollBatchSize;
+          renderGrid();
+        };
+        btn.dataset.rule = rule;
+        els.rules.appendChild(btn);
+      });
+    }
+
+    function updateCategoryUI() {
+      Array.from(els.categories.children).forEach((btn, i) => {
+        if (i === 0) { // All btn
+          if (activeCategories.size === 0) {
+            btn.className = 'px-3 py-1.5 bg-[#0071e3] border border-[#0077ed] text-white rounded-lg text-[11px] font-semibold transition shadow-sm';
+          } else {
+            btn.className = 'px-3 py-1.5 bg-white border border-gray-200 text-gray-500 hover:text-gray-800 rounded-lg text-[11px] font-medium transition';
+          }
+        } else {
+          const cat = btn.dataset.cat;
+          if (activeCategories.has(cat)) {
+            btn.className = 'px-3 py-1.5 bg-[#0071e3] border border-[#0077ed] text-white rounded-lg text-[11px] font-semibold transition shadow-sm';
+          } else {
+            btn.className = 'px-3 py-1.5 bg-white border border-gray-200 text-gray-500 hover:text-gray-800 rounded-lg text-[11px] font-medium transition hover:border-gray-300';
+          }
+        }
+      });
+    }
+
+    function updateRuleUI() {
+      Array.from(els.rules.children).forEach((btn, i) => {
+        if (i === 0) {
+          if (activeRules.size === 0) {
+            btn.className = 'px-3 py-1.5 bg-[#0071e3] border border-[#0077ed] text-white rounded-lg text-[11px] font-semibold transition shadow-sm';
+          } else {
+            btn.className = 'px-3 py-1.5 bg-white border border-gray-200 text-gray-500 hover:text-gray-800 rounded-lg text-[11px] font-medium transition';
+          }
+        } else {
+          const rule = btn.dataset.rule;
+          if (activeRules.has(rule)) {
+            btn.className = 'px-3 py-1.5 bg-[#0071e3] border border-[#0077ed] text-white rounded-lg text-[11px] font-semibold transition shadow-sm';
+          } else {
+            btn.className = 'px-3 py-1.5 bg-white border border-gray-200 text-gray-500 hover:text-gray-800 rounded-lg text-[11px] font-medium transition hover:border-gray-300';
+          }
+        }
+      });
+    }
+
+    let debounceTimer;
+    function debounceRender() {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        displayLimit = scrollBatchSize;
+        renderGrid();
+      }, 300);
+    }
+
+    function getDateStart(dateStr) {
+      if (!dateStr) return null;
+      const d = new Date(dateStr + 'T00:00:00');
+      return Number.isNaN(d.getTime()) ? null : d.getTime();
+    }
+
+    function getDateEnd(dateStr) {
+      if (!dateStr) return null;
+      const d = new Date(dateStr + 'T23:59:59.999');
+      return Number.isNaN(d.getTime()) ? null : d.getTime();
+    }
+
+    function formatRuleLabel(rule) {
+      if (!rule) return '';
+      let normalized = rule.replace(/\s+/g, '');
+      if (normalized.startsWith('全时段总计破')) {
+        normalized = normalized.replace('全时段总计破', '总计破');
+      }
+      normalized = normalized.replace('10000万', '1亿');
+      return normalized;
+    }
+
+    function toMillis(value) {
+      if (typeof value === 'number') return value;
+      const t = Date.parse(value);
+      return Number.isNaN(t) ? 0 : t;
+    }
+
+    function renderGrid(isAppend = false) {
+      let results = currentMonthVideos;
+      // 1. Search
+      const q = els.search.value.trim();
+      if (q && fuse) {
+        results = fuse.search(q).map(i => i.item);
+      }
+
+      // 2. Category Filter
+      if (activeCategories.size > 0) {
+        results = results.filter(v => activeCategories.has(v.category || '未分类'));
+      }
+
+      // 3. Rule Filter
+      if (activeRules.size > 0) {
+        results = results.filter(v => (v.matchedRules || []).some(r => activeRules.has(r)));
+      }
+
+      // 3.5 Duration Filter
+      if (activeDurationRanges.size > 0) {
+        results = results.filter(v => {
+          const sec = v.durationSec || 0;
+          return Array.from(activeDurationRanges).some(rangeLabel => {
+            const range = durationRanges.find(r => r.label === rangeLabel);
+            return sec >= range.min && sec < range.max;
+          });
+        });
+      }
+
+      // 4. Discover Date Filter
+      const discoverStart = getDateStart(els.discoverStart.value);
+      const discoverEnd = getDateEnd(els.discoverEnd.value);
+      if (discoverStart !== null || discoverEnd !== null) {
+        results = results.filter(v => {
+          const t = toMillis(v.discoveredAt);
+          if (discoverStart !== null && t < discoverStart) return false;
+          if (discoverEnd !== null && t > discoverEnd) return false;
+          return true;
+        });
+      }
+
+      // 5. Publish Date Filter
+      const publishStart = getDateStart(els.publishStart.value);
+      const publishEnd = getDateEnd(els.publishEnd.value);
+      if (publishStart !== null || publishEnd !== null) {
+        results = results.filter(v => {
+          const t = toMillis(v.publishedAt);
+          if (publishStart !== null && t < publishStart) return false;
+          if (publishEnd !== null && t > publishEnd) return false;
+          return true;
+        });
+      }
+
+      // 6. Sort
+      const sortMode = els.sort.value;
+      results.sort((a, b) => {
+        if (sortMode === 'timeDown') return b.discoveredAt - a.discoveredAt;
+        if (sortMode === 'viewsDown') return b.viewCount - a.viewCount;
+        if (sortMode === 'pubDown') return b.publishedAt - a.publishedAt; // 最新发布
+        return 0;
+      });
+
+      els.total.textContent = results.length;
+      const fullResults = results;
+      const totalAfterFilters = results.length;
+
+      if (totalAfterFilters === 0) {
+        els.grid.innerHTML = '';
+        showEmpty("未找到符合你胃口的猎物。");
+        return;
+      }
+
+      if (!isAppend) {
+        els.grid.innerHTML = '';
+      }
+
+      // Slice for display
+      const sliceToShow = fullResults.slice(isAppend ? displayLimit - scrollBatchSize : 0, displayLimit);
+
+      if (sliceToShow.length === 0 && !isAppend) return;
+
+      const frag = document.createDocumentFragment();
+      sliceToShow.forEach(v => {
+        const div = document.createElement('div');
+        div.className = 'bg-white border border-gray-200 rounded-xl p-3 hover:border-blue-300 transition duration-300 group shadow-sm hover:shadow-md flex flex-col fade-in relative overflow-hidden min-h-[320px]';
+        div.dataset.videoId = v.videoId;
+        div.dataset.category = v.category || '未分类';
+        div.dataset.channel = v.channelTitle || '';
+        div.dataset.views = String(v.viewCount || 0);
+        div.dataset.title = v.title || '';
+        div.dataset.duration = v.duration || '';
+        div.dataset.durationSec = String(v.durationSec || 0);
+        applyCardState(div, v.videoId);
+
+        // bg highlight for Top 10m views
+        if (v.viewCount > 10000000) {
+          div.insertAdjacentHTML('afterbegin', '<div class="absolute -top-10 -right-10 w-32 h-32 bg-blue-200/40 rounded-full blur-2xl pointer-events-none"></div>');
+        }
+
+        const pd = new Date(v.publishedAt);
+        const pubDate = `${String(pd.getFullYear()).slice(-2)}/${pd.getMonth()+1}/${pd.getDate()} ${String(pd.getHours()).padStart(2,'0')}:${String(pd.getMinutes()).padStart(2,'0')}`;
+        const discStr = new Date(v.discoveredAt).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        const views = (v.viewCount / 10000).toFixed(1);
+
+        const fireBadge = Number(views) > 1000 ? '🚀' : '🔥';
+        const ruleCount = v.matchedRules.length;
+        const firstRule = ruleCount > 0 ? formatRuleLabel(v.matchedRules[0]) : '';
+        const extraRuleCount = ruleCount > 1 ? ruleCount - 1 : 0;
+        const rulesHtml = firstRule
+          ? `<span class="bg-[#f5f5f7] border border-gray-200 rounded-md px-1.5 py-0.5 text-[9px] text-gray-600 font-mono tracking-tight shrink-0">${firstRule}</span>` +
+          (extraRuleCount > 0
+            ? `<span class="bg-[#f5f5f7] border border-gray-200 rounded-md px-1.5 py-0.5 text-[9px] text-gray-600 font-mono tracking-tight shrink-0">+${extraRuleCount}</span>`
+            : '')
+          : '';
+        const watchUrl = `https://www.youtube.com/watch?v=${v.videoId}`;
+        const shortsUrl = `https://www.youtube.com/shorts/${v.videoId}`;
+        const thumbUrl = v.thumbnailUrl || '';
+        const thumbHtml = thumbUrl
+          ? `<img src="${thumbUrl}" alt="${v.title}" class="w-full h-full object-cover" loading="lazy">`
+          : `<div class="w-full h-full flex items-center justify-center text-xs text-gray-400">暂无封面</div>`;
+        const durationHtml = v.duration
+          ? `<span class="absolute top-2 right-2 bg-black/70 text-white text-[10px] font-bold px-1.5 py-0.5 rounded backdrop-blur-sm z-20">${v.duration}</span>`
+          : '';
+
+        div.innerHTML += `
+        <div class="flex items-center justify-between mb-2 z-10 w-full">
+          <span class="px-2 py-0.5 bg-[#f5f5f7] border border-gray-200 rounded-lg text-[11px] font-semibold text-gray-600 shadow-sm">${v.category || '未分'}</span>
+          <div class="flex items-center gap-2">
+            <span class="text-[11px] font-semibold text-gray-500 bg-[#f5f5f7] py-0.5 px-1.5 rounded-lg border border-gray-200">截获于 ${discStr}</span>
+            <button data-fav-toggle="true" class="fav-btn text-gray-400 hover:text-[#ff9f0a] transition" aria-label="收藏">
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.664.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.563.563 0 0 1-.84.61l-4.725-2.885a.563.563 0 0 0-.586 0l-4.725 2.885a.562.562 0 0 1-.84-.61l1.285-5.385a.562.562 0 0 0-.182-.557l-4.204-3.602a.562.562 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345z"/></svg>
+            </button>
+          </div>
+        </div>
+        
+        <a href="${shortsUrl}" target="_blank" class="mb-2 rounded-lg border border-gray-200 overflow-hidden aspect-video bg-[#f5f5f7] z-10 block relative">
+          ${durationHtml}
+          ${thumbHtml}
+        </a>
+
+        <h3 class="text-sm font-semibold text-gray-900 mb-2 line-clamp-2 leading-snug z-10">
+          <a href="${watchUrl}" target="_blank" class="hover:underline decoration-blue-400/50 outline-none">
+            <span class="text-gray-500 font-medium">【${v.channelTitle || '未知'}】</span>${v.title}
+          </a>
+        </h3>
+        
+        <div class="flex flex-wrap items-center gap-1.5 z-10 mb-2">
+          <span class="text-xl font-semibold text-gray-900 ${Number(views) > 1000 ? 'text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-cyan-500' : ''}">${views} 万 ${fireBadge}</span>
+          ${rulesHtml}
+        </div>
+
+        <div class="mt-auto border-t border-gray-50/50 flex items-center justify-between z-10">
+          <span class="text-[10px] text-gray-400 font-medium">发布于 ${pubDate}</span>
+        </div>
+      `;
+        applyFavoriteState(div, v.videoId);
+        frag.appendChild(div);
+      });
+
+      els.grid.appendChild(frag);
+
+      // Re-attach sentinel if needed
+      if (totalAfterFilters > displayLimit) {
+        els.grid.appendChild(els.sentinel);
+      } else if (els.sentinel.parentNode === els.grid) {
+        els.grid.removeChild(els.sentinel);
+      }
+    }
+
+    function loadVisitedSet() {
+      try {
+        const raw = localStorage.getItem(storageKeys.visited);
+        const list = raw ? JSON.parse(raw) : [];
+        return new Set(Array.isArray(list) ? list : []);
+      } catch (e) {
+        return new Set();
+      }
+    }
+
+    function loadLastClicked() {
+      const raw = localStorage.getItem(storageKeys.lastClicked);
+      return raw || '';
+    }
+
+    function persistClickState() {
+      localStorage.setItem(storageKeys.visited, JSON.stringify(Array.from(visitedSet)));
+      localStorage.setItem(storageKeys.lastClicked, lastClickedId || '');
+    }
+
+    function applyCardState(card, videoId) {
+      const isLast = lastClickedId === videoId;
+      const isClicked = visitedSet.has(videoId);
+      card.classList.toggle('last-clicked-card', isLast);
+      card.classList.toggle('unclicked-card', !isClicked && !isLast);
+    }
+
+    function loadFavoritesMap() {
+      try {
+        const raw = localStorage.getItem(storageKeys.favorites);
+        const obj = raw ? JSON.parse(raw) : {};
+        return obj && typeof obj === 'object' ? obj : {};
+      } catch (e) {
+        return {};
+      }
+    }
+
+    function persistFavorites() {
+      localStorage.setItem(storageKeys.favorites, JSON.stringify(favoritesMap));
+    }
+
+    function applyFavoriteState(card, videoId) {
+      const btn = card.querySelector('[data-fav-toggle="true"]');
+      if (!btn) return;
+      const active = Boolean(favoritesMap[videoId]);
+      btn.classList.toggle('fav-active', active);
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+      btn.setAttribute('title', active ? '取消收藏' : '收藏');
+    }
+
+    function renderFavorites() {
+      const items = Object.values(favoritesMap).sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0));
+      els.favoritesCount.textContent = String(items.length);
+      if (items.length === 0) {
+        els.favoritesList.innerHTML = '<div class="text-sm text-gray-500">暂无收藏</div>';
+        return;
+      }
+      const frag = document.createDocumentFragment();
+      items.forEach(item => {
+        const views = item.viewCount ? (item.viewCount / 10000).toFixed(1) : '0.0';
+        const div = document.createElement('div');
+        div.innerHTML = `
+        <div class="bg-white border border-gray-200 rounded-lg p-2.5 hover:border-[#ff9f0a]/60 transition" data-fav-item="${item.videoId}">
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">${item.category || '未分'}</span>
+            <div class="flex items-center gap-2">
+              <span class="text-[10px] font-semibold text-gray-500">${item.duration || ''} · ${views} 万</span>
+              <button data-fav-remove="true" data-video-id="${item.videoId}" class="fav-btn fav-active transition" title="取消收藏" aria-pressed="true">
+                <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.664.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.563.563 0 0 1-.84.61l-4.725-2.885a.563.563 0 0 0-.586 0l-4.725 2.885a.562.562 0 0 1-.84-.61l1.285-5.385a.562.562 0 0 0-.182-.557l-4.204-3.602a.562.562 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345z"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="text-sm font-semibold text-gray-800 truncate mb-1">${item.channelTitle || '未知博主'}</div>
+          <div class="text-xs text-gray-500 truncate mb-2">${item.title || '无标题'}</div>
+          <div class="flex items-center gap-2">
+            <a href="https://www.youtube.com/watch?v=${item.videoId}" target="_blank" class="px-2 py-1 rounded-md bg-white border border-gray-200 text-[10px] font-semibold text-gray-600 hover:text-blue-600 hover:border-blue-300 transition">Watch</a>
+            <a href="https://www.youtube.com/shorts/${item.videoId}" target="_blank" class="px-2 py-1 rounded-md bg-white border border-gray-200 text-[10px] font-semibold text-gray-600 hover:text-blue-600 hover:border-blue-300 transition">Shorts</a>
+          </div>
+        </div>
+      `;
+        frag.appendChild(div);
+      });
+      els.favoritesList.innerHTML = '';
+      els.favoritesList.appendChild(frag);
+    }
+
+    function updateAllCardStates() {
+      const cards = els.grid.querySelectorAll('[data-video-id]');
+      cards.forEach(card => applyCardState(card, card.dataset.videoId));
+    }
+
+    function handleGridClick(e) {
+      const favBtn = e.target.closest('[data-fav-toggle="true"]');
+      if (favBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const card = favBtn.closest('[data-video-id]');
+        if (!card) return;
+        const videoId = card.dataset.videoId;
+        if (!videoId) return;
+        if (favoritesMap[videoId]) {
+          delete favoritesMap[videoId];
+        } else {
+          favoritesMap[videoId] = {
+            videoId,
+            category: card.dataset.category || '未分类',
+            channelTitle: card.dataset.channel || '',
+            viewCount: Number(card.dataset.views || 0),
+            title: card.dataset.title || '',
+            duration: card.dataset.duration || '',
+            durationSec: Number(card.dataset.durationSec || 0),
+            addedAt: Date.now()
+          };
+        }
+        persistFavorites();
+        applyFavoriteState(card, videoId);
+        renderFavorites();
+        return;
+      }
+
+      const link = e.target.closest('a[href*="youtube.com/watch?v="], a[href*="youtube.com/shorts/"]');
+      if (!link) return;
+      const card = link.closest('[data-video-id]');
+      if (!card) return;
+      const videoId = card.dataset.videoId;
+      if (!videoId) return;
+      visitedSet.add(videoId);
+      lastClickedId = videoId;
+      persistClickState();
+      updateAllCardStates();
+    }
+
+    els.favoritesList.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-fav-remove="true"]');
+      if (!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const videoId = btn.dataset.videoId;
+      if (!videoId || !favoritesMap[videoId]) return;
+      delete favoritesMap[videoId];
+      persistFavorites();
+      renderFavorites();
+      const card = els.grid.querySelector(`[data-video-id="${videoId}"]`);
+      if (card) applyFavoriteState(card, videoId);
+    });
+
+    function showEmpty(msg) {
+      els.grid.innerHTML = `
+      <div class="col-span-full flex flex-col items-center justify-center py-24 text-gray-500 fade-in">
+        <svg class="w-16 h-16 text-gray-700 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>
+        <p class="text-lg font-medium">${msg}</p>
+      </div>
+    `;
+    }
+
+    // Start app
+    init();
+  </script>
+</body>
+
+</html>
