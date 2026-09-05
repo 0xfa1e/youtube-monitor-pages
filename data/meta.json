@@ -1,0 +1,33 @@
+{
+  "months": [
+    "2026_09",
+    "2026_08",
+    "2026_07",
+    "2026_06",
+    "2026_05",
+    "2026_04",
+    "2026_03"
+  ],
+  "hallOfFame": [
+    {
+      "id": "rule_100m",
+      "label": "全网总破1亿",
+      "file": "videos_rule_100m.json"
+    },
+    {
+      "id": "rule_50m",
+      "label": "总破5千万",
+      "file": "videos_rule_50m.json"
+    },
+    {
+      "id": "rule_20m",
+      "label": "总破2千万",
+      "file": "videos_rule_20m.json"
+    },
+    {
+      "id": "rule_1m_long",
+      "label": "长视频总破100万",
+      "file": "videos_rule_1m_long.json"
+    }
+  ]
+}
